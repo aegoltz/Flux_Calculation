@@ -1,0 +1,446 @@
+---
+title: "Goltz, Till, and Kent (2023) Calculation of Flux"
+output:
+  html_document: default
+  html_notebook: default
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+## Summary
+
+This notebook will allow you to calculate flux given appropriate ranges of input variables.
+
+As is, the notebook is tailored to calculate flux per km arc in the Aleutians, but all variables can be changed as desired.
+
+## Load Appropriate Libraries
+
+```{r}
+library(tidyverse) # Imports ggplot (for creation of figures) and dplyr for future data manipulation
+library(readxl) # Allows us to read in Excel sheets
+library(egg) # Aesthetic package, allows for beautiful and easy formatting, especially of composite figures
+library(pracma) # Practical math functions, used here for easy conversion of degrees to radians
+```
+
+## Decide on a number of model iterations
+
+```{r}
+nrun<-100000
+```
+
+
+## Define Inputs
+
+In the following chunk, we define ranges of input variables. The inputs are in the form Input_range=c(min,max)
+```{r}
+# Wet and dry melt fractions
+Fwet_range=c(5, 30)
+Fdry_range=c(1,20)
+# define convergence rate in m/year for the Aleutians
+ConvergenceRate_range=c(2e-2,7.5e-2)
+# mantle and liquid densities in kg/m3
+rhomantle_range=c(3.2e3, 3.3e3)
+rhototal_range=c(2.19e3,3.03e3) # liquid range
+# Mantle Grain size (in m)
+dtotal_range=c(1e-3,10e-3)
+# Mantle viscosity (in Pa s)
+mu_range=c(1, 10)
+# slab dip (in degrees) for the Aleutians
+dip_range=c(45.6, 55.9)
+# LAB depth (in m) for the Aleutians
+depthLAB_range=c(35.6e3,41.4e3)
+#Radius ARC-PERPENDICULAR (in m)
+volcanoradius_range=c(0.01e3,100e3)
+# the radius along the arc in meters. In this example, we're looking to model a flux per km along arc, so this is set stagnant at 0.5km
+AlongArcRad_range=c(0.5e3,0.5e3)
+# define a range of potential channel radii (define in m).
+# the values chosen here are the range of values tested by Grove et al 2002 in their analysis
+# and workup of lavas at Mount Shasta. The paper evaluates the viability of Stokes flow for the transport
+# of hydrous melts at subduction zones, and, based on the velocity of the mantle, finds an upper limit
+# of channel radius. That doesn't really apply to us, since we're only modeling stokes flow for decompression melts
+# but we're going to call their tested range reasonable.
+channelradius_range=c(0.5e3, 5e3)
+#also need gravity (in m/s2)
+g<-9.8
+```
+
+## Calculate random values to express error around lines
+
+```{r}
+# Let's start with depth the the slab, H
+# We will calculate a value of H based on the line of form a*cos(lambda)+b=H, and add to that a random number
+# from a normal distribution with mean of zero (or really the mean of the residuals, which is on the order of 1e-16) and s.d. of the r.s.e.
+
+Hcorrection<-rnorm(nrun,mean=3.95e-16,sd=23.62)
+
+# let's define the fit coefficients as rnorm distributions, with nrun number of values
+
+# Start with H from cos dip
+Hslope<-41.745
+# it did!
+Hintercept<-59.072
+
+# now, time from F
+tcorrectwet<-rnorm(nrun,mean=2.9e-15,sd=48.77) # we are doing this correction separately for wet and dry melts
+tcorrectdry<-rnorm(nrun,mean=2.9e-15,sd=48.77)
+
+tslope=-4.407
+tintercept=153.670
+
+# finally, permeability is calculated by a power function fit, involving grain size and F
+# it has 2 coefficients, n (basically describes melt connectivity) and C (a geometric constant)
+# C has asymmetric error, which we have no way to express in r (to my knowledge)
+# instead, we'll approximate it as a normal distribution with standard deviation equal to the average of the two errors
+
+nfitrand<-rnorm(nrun,mean=2.6,sd=0.2)
+Cfitrand<-rnorm(nrun,mean=58,sd=29)
+
+# Correction for the upper limit of wet melting, based on range in depth to hottest part of mantle from the syracuse 2010 compilation, which we calculate from H
+# Given in m
+HMDIntercept<-1.837e4
+HMDSlope<-6.656e-1
+HMDCorrect<-rnorm(nrun,mean=-5.16184e-13,sd=11600)
+```
+
+## Generate random arrays of numbers between 0 and 1
+
+```{r}
+nrA=runif(nrun,min=0,max=1)
+nrB=runif(nrun,min=0,max=1)
+nrC=runif(nrun,min=0,max=1)
+nrD=runif(nrun,min=0,max=1)
+nrE=runif(nrun,min=0,max=1)
+nrF=runif(nrun,min=0,max=1)
+nrG=runif(nrun,min=0,max=1)
+nrH=runif(nrun,min=0,max=1)
+nrI=runif(nrun,min=0,max=1)
+nrJ=runif(nrun,min=0,max=1)
+nrK=runif(nrun,min=0,max=1)
+nrL=runif(nrun,min=0,max=1)
+nrM=runif(nrun,min=0,max=1)
+```
+
+## Calculate Flux
+If using a PC, disable final line 240 of code (i.e., add hash). This function is 100% aesthetic, so you won't miss out on a thing!
+```{r}
+#initialize progress bar
+pb=txtProgressBar(min = 0, max = nrun, initial = 0, style=3) 
+for(i in 1:nrun){
+  #update progress bar
+  setTxtProgressBar(pb,i)
+  # first, we will define all random variables from their ranges
+  Fwet=(min(Fwet_range)+((max(Fwet_range)-min(Fwet_range)))*nrA)
+  Fdry=(min(Fdry_range)+((max(Fdry_range)-min(Fdry_range)))*nrI)
+  rhomantle=(min(rhomantle_range)+((max(rhomantle_range)-min(rhomantle_range)))*nrB)
+  rhototal=(min(rhototal_range)+((max(rhototal_range)-min(rhototal_range)))*nrC)
+  dtotal=(min(dtotal_range)+((max(dtotal_range)-min(dtotal_range)))*nrD)
+  mu=(min(mu_range)+((max(mu_range)-min(mu_range)))*nrE)
+  dip=(min(dip_range)+((max(dip_range)-min(dip_range)))*nrF)
+  depthLAB=(min(depthLAB_range)+((max(depthLAB_range)-min(depthLAB_range)))*nrG)
+  volcanoradius=(min(volcanoradius_range)+((max(volcanoradius_range)-min(volcanoradius_range)))*nrH)
+  channelradius=(min(channelradius_range)+((max(channelradius_range)-min(channelradius_range)))*nrJ)
+  ConvergenceRate=(min(ConvergenceRate_range)+((max(ConvergenceRate_range)-min(ConvergenceRate_range)))*nrK)
+  AlongArcRad=(min(AlongArcRad_range)+((max(AlongArcRad_range)-min(AlongArcRad_range)))*nrM)
+  
+  
+  # Step 1: Calculate time and scale for grain size
+  experimenttimehourwet=((Fwet*tslope)+tintercept)+tcorrectwet
+  experimenttimehourwet=ifelse(experimenttimehourwet<0,NA,experimenttimehourwet)
+  experimenttimesecondwet=experimenttimehourwet*60*60
+  ordermagdiff=1/(1e-6/dtotal) #we assume experimental grain size is on the order of 10-7
+  timesecondwet=(experimenttimesecondwet*ordermagdiff^2) # we're scaling by ^2 because of diffusion principles
+  timemyrwet=(experimenttimesecondwet*ordermagdiff^2)*3.2e-14
+  
+  experimenttimehourdry=((Fdry*tslope)+tintercept)+tcorrectdry
+  experimenttimehourdry=ifelse(experimenttimehourdry<0,NA,experimenttimehourdry)
+  experimenttimeseconddry=experimenttimehourdry*60*60
+  timeseconddry=(experimenttimeseconddry*ordermagdiff^2)
+  timemyrdry=(experimenttimeseconddry*ordermagdiff^2)*3.2e-14
+  
+  
+  # Step 2: Calculate volume of mantle that is melting
+    # Intermediate step: calculate depth to slab (H) given dips in m
+    H=((((Hslope*1/cos(dip*pi/180))+Hintercept))+Hcorrection)*10^3 # ok we calculate H from the dip, then we add the correction based on the residual standard error. Then convert to meters.
+    H=ifelse(H<0,NA,H)
+    # Calculate Hot Mantle Depth from H
+    HotMantleDepth=(H*HMDSlope)+HMDIntercept+HMDCorrect # this is the formula as defined above with a correction factor
+    #Intermediate step2: discount the mantle not hot enough to melt and lithosphere by subtracting DEPTH OF HOTTEST PART OF MANTLE from H
+    Heff=H-HotMantleDepth
+    Heff=ifelse(Heff<0,NA,Heff)
+  #Calculate height of decompression melting mantle
+    Hdry=HotMantleDepth-depthLAB
+    Hdry=ifelse(Hdry<0,NA,Hdry)
+    # Define Volcano Radius based on Heff. The volcano radius in an iteration CANNOT be greater than the distance to the slab  
+volcanoradius=(min(volcanoradius_range)+((Heff/tan(dip*pi/180))-min(volcanoradius_range))*nrH)
+    
+    
+    # Calculate volume of dry melting mantle (a cylinder). Its arc perpendicular radius is half that Wet Melt, but along arc is the same
+    rdry=volcanoradius/2
+    volumedry=pi*(rdry)*AlongArcRad*Hdry
+  # Calculate volume of wet melting mantle
+    #The geometric constraint on the maximum height puts a limit on the allowable radius for a given iteration
+    # We're going to use basic geometry to get there. Ultimately we need to define the maximum radius allowed
+    # We'll eventually solve for this using the pythagorean theorum but first to do that, we need to define the 
+    # length of the slab (our hypotenuse) based on the height of the triangle
+    SlabLength=Heff/sin(dip*(pi/180))
+    # Now we can define the maximum allowable radius as RMax
+    RMax=sqrt(SlabLength^2-Heff^2)
+    # Define a variable comparing RMax to volcano radius, so we can easily tell the code which runs to disregard
+    RCompare=volcanoradius-RMax
+    #ok, calculating volume of wet melting
+    #Depth of the greatest depth of possible melting Hwet
+    Hwet=2*volcanoradius*tan(dip*pi/180)
+    # Depth of the point the cylinder intersects the slab, Hcyl. Above this depth, we calculate volume as a standard cylinder
+    Hcyl=(RMax-volcanoradius)*tan(dip*pi/180)
+    # Depth to the actual depth of wet melting, given a radius less than the Max
+    Hwedge=Hwet-Hcyl
+    # Volume of the upper cylinder
+    VolumeCyl=pi*volcanoradius*AlongArcRad*Hcyl
+    #Volume of the wedge, which is a bisected cylinder
+    VolumeWedge=pi/2*volcanoradius*AlongArcRad*Hwedge
+    volumewet=VolumeCyl+VolumeWedge
+  
+    
+    
+  # Step 3: calculate darcy flux and stokes flux
+    # let's start with Darcy flux
+    # Intermediate step 1: calculate permeability using equation from Miller et al 2014
+    k=(((Fwet/100)^nfitrand)*dtotal^2)/Cfitrand
+    k=ifelse(k<0,NA,k)
+    deltarho=rhomantle-rhototal
+    Darcyflux=((k*deltarho*g)/((Fwet/100)*mu)) # this is a darcy velocity 
+    DarcyTime=(1/Darcyflux*(HotMantleDepth-depthLAB))*3.2e-14 # calculate the amount of time in million years it takes for melt to make it to the crust traveling by Reactive Porous Flow from hot mantle depth
+    Stokesflux=((2*deltarho*g*rdry^2)/(9*mu)) #  this is a stokes velocity
+    StokesTime=(1/Stokesflux*Hdry)*3.2e-14 # calculate the amount of time in million years it takes for melt to get through the entire cylinder of dry melting via channelized flow
+  
+    # Step 4: Calculate extraction efficiency
+    WetDiffusionRate=((2.17721E-19)*15)/dtotal # equation based off of that given in Hauri 1997, diffusivity times a porous flow coefficient divided by grain size. Diffusivity from Costa and Chakraborty (2008), T=1300
+    Wetefficiency=Darcyflux/WetDiffusionRate
+    Wetefficiency=ifelse(Wetefficiency>1,1,Wetefficiency)
+    DryDiffusionRate=((2.17721E-19)*10)/channelradius # equation again from Hauri 1997, diffusivity times a channelized flow coefficient, divided by channel radius.
+    Dryefficiency=Stokesflux/DryDiffusionRate
+    Dryefficiency=ifelse(Dryefficiency>1,1,Dryefficiency)
+    
+    
+    # Step 5: Calculate flux in km3/myr 
+    WetFlux=((Fwet/100)/(timemyrwet+DarcyTime))*(volumewet*1e-9)*Wetefficiency #add to time the darcy and stokes transits
+    DryFlux=((Fdry/100)/(timemyrdry+StokesTime))*(volumedry*1e-9)*Dryefficiency
+    TotalFlux=WetFlux+DryFlux
+    
+    # Step 5.5: Adjust flux for convergence rate
+    # Assume that model time/(convergence rate*maximum slab depth) gives the number of times the mantle is replenished and melting can occur
+    # We'll use the time from wet melting because it will always be longer
+    FluxAdjustWet=(timemyrwet*1e6)/((1/ConvergenceRate)*sqrt(Hwet^2+(2*volcanoradius)^2))# the distance traveled is  a function of the radius as well
+    FluxAdjustDry=(timemyrdry*1e6)/((1/ConvergenceRate)*sqrt(Hwet^2+(2*volcanoradius)^2)) # We're just still keeping the depth of the slab
+    AdjustedFlux=(WetFlux*FluxAdjustWet)+(DryFlux*FluxAdjustDry)
+    #close progress bar
+    close(pb)
+    if(i==nrun){system("say Get off your ass!")}
+}
+```
+
+## Create dataframes from raw output
+This allows us to plot them more easily later
+```{r}
+
+AdjustedFluxdf<-as.data.frame(AdjustedFlux)
+Residualabsdf<-as.data.frame(Residualabs)
+TotalFluxdf<-as.data.frame(TotalFlux)
+DryFluxdf<-as.data.frame(DryFlux)
+WetFluxdf<-as.data.frame(WetFlux)
+Dryefficiencydf<-as.data.frame(Dryefficiency)
+Wetefficiencydf<-as.data.frame(Wetefficiency)
+Stokesfluxdf<-as.data.frame(Stokesflux)
+Darcyfluxdf<-as.data.frame(Darcyflux)
+deltarhodf<-as.data.frame(deltarho)
+kdf<-as.data.frame(k)
+volumewetdf<-as.data.frame(volumewet)
+volumedrydf<-as.data.frame(volumedry)
+Hwetdf<-as.data.frame(Hwet)
+Hdrydf<-as.data.frame(Hdry)
+Heffdf<-as.data.frame(Heff)
+Hdf<-as.data.frame(H)
+Fwetdf<-as.data.frame(Fwet)
+Fdrydf<-as.data.frame(Fdry)
+rhomantledf<-as.data.frame(rhomantle)
+rhototaldf<-as.data.frame(rhototal)
+dtotaldf<-as.data.frame(dtotal)
+mudf<-as.data.frame(mu)
+dipdf<-as.data.frame(dip)
+depthLABdf<-as.data.frame(depthLAB)
+volcanoradiusdf<-as.data.frame(volcanoradius)
+experimenttimehourwetdf<-as.data.frame(experimenttimehourwet)
+experimenttimesecondwet<-as.data.frame(experimenttimesecondwet)
+ordermagdiffdf<-as.data.frame(ordermagdiff)
+timesecondwetdf<-as.data.frame(timesecondwet)
+timemyrwetdf<-as.data.frame(timemyrwet)
+experimenttimehourdrydf<-as.data.frame(experimenttimehourdry)
+experimenttimeseconddrydf<-as.data.frame(experimenttimeseconddry)
+timeseconddrydf<-as.data.frame(timeseconddry)
+timemyrdrydf<-as.data.frame(timemyrdry)
+RMaxdf<-as.data.frame(RMax)
+RComparedf<-as.data.frame(RCompare)
+AlongArcRaddf<-as.data.frame(AlongArcRad)
+ConvergenceRatedf<-as.data.frame(ConvergenceRate)
+DarcyTimedf<-as.data.frame(DarcyTime)
+StokesTimedf<-as.data.frame(StokesTime)
+FluxAdjustWetdf<-as.data.frame(FluxAdjustWet)
+FluxAdjustDrydf<-as.data.frame(FluxAdjustDry)
+```
+
+## Create a big ole dataframe
+This one's called Aleutians 14
+```{r}
+Aleutians14<-bind_cols(TotalFluxdf,
+                       DryFluxdf,
+                       WetFluxdf,
+                       Dryefficiencydf,
+                       Wetefficiencydf,
+                       Stokesfluxdf,
+                       Darcyfluxdf,
+                       deltarhodf,
+                        kdf,
+                        volumewetdf,
+                        volumedrydf,
+                        Hwetdf,
+                        Hdrydf,
+                        Heffdf,
+                        Hdf,
+                        Fwetdf,
+                        Fdrydf,
+                        rhomantledf,
+                        rhototaldf,
+                        dtotaldf,
+                        mudf,
+                        dipdf,
+                        depthLABdf,
+                        volcanoradiusdf,
+                        experimenttimehourwetdf,
+                        experimenttimesecondwet,
+                        ordermagdiffdf,
+                        timesecondwetdf,
+                        timemyrwetdf,
+                        experimenttimehourdrydf,
+                        experimenttimeseconddrydf,
+                        timeseconddrydf,
+                        timemyrdrydf, 
+                        AdjustedFluxdf,
+                        ConvergenceRatedf,
+                        RMaxdf,
+                        RComparedf,
+                        AlongArcRaddf,
+                        DarcyTimedf,
+                        StokesTimedf,
+                       FluxAdjustWetdf,
+                       FluxAdjustDrydf)%>%
+  mutate(DescentRate=ConvergenceRate*sin(deg2rad(dip)))%>%
+  filter(RCompare<=0)
+```
+
+We can summarize our results as reported in Table 2:
+```{r}
+AverageVolcanicAleutians=211 # From Jicha and Jagoutz (2015)
+SummarizeAleutians<-Aleutians14%>% # define a summary DF
+  filter(ResidualLimitAdjust!="NA"&volcanoradius!="NA")%>% # Just checking that we don't have any negative numbers!
+  summarize(FML=mean(AdjustedFlux,na.rm=TRUE), # mean flux, or "most likely"
+            FSD=sd(AdjustedFlux,na.rm=TRUE),  # standard deviation of the mean
+            FLP=min(AdjustedFlux, na.rm=TRUE), # lowest calculated flux in the model "lowest possible"
+            FUP=max(AdjustedFlux, na.rm=TRUE))%>% # highest calculated flux in the model "upper possible"
+  mutate(FLUB=meanflux+sdflux)%>% # Likely upper bound of flux (mean+sd)
+  mutate(FU=100*AverageVolcanicAleutians/FLUB) # "Flux used", or the reported literature value vs. our model
+SummarizeAleutians
+
+```
+
+
+# Making figures as found in this text
+
+## Figure 1
+
+Subplots (a-c) can be generated using these plots
+
+First, import files (must saved be in same directory as this notebook or, if not, paste in path)
+
+```{r}
+#Put code here
+ContinentalArcFlux<-read_excel("ContinentalArcFlux.xlsx")
+OceanicArcFlux<-read_excel("OceanicArcFlux.xlsx")
+OurResultsFlux<-read_excel("OurResultsFlux.xlsx")
+```
+
+
+Sublot a
+```{r}
+Continental_Arc_Flux_Plot<-
+  ggplot(data=ContinentalArcFlux)+
+  geom_histogram(aes((x=`Flux(km3/km/myr)`), after_stat(ncount)), fill="pink", color="black", binwidth=0.5, alpha=0.5)+
+  scale_x_log10(breaks = scales::trans_breaks("log10", function(x) 10^x),
+                labels = scales::trans_format("log10", scales::math_format(10^.x)), limits=c(0.5e0,2e3))+
+  annotation_logticks(sides="b")+
+  labs(x=expression("Flux (km"^"3"*"/km/myr)"),y="Normalized Count", color="Arc Type")+
+  theme_article()+
+  theme(axis.text = element_text(size=16, color="black"), axis.title = element_text(size=24, color="black"))+
+  theme(axis.text.x = element_blank(), axis.title.x = element_blank(), axis.title.y=element_blank())+
+  annotate("text", x=200,y=0.95,label="Continental", color="pink", size=8)+
+  annotate("text", x=300,y=0.8,label="Arcs", color="pink", size=8)+
+  annotate("text", x=1,y=0.95,label="n=22", color="pink", size=6)  
+```
+Subplot B
+```{r}
+Oceanic_Arc_Flux_Plot<-
+  ggplot(data=OceanicArcFlux)+
+  geom_histogram(aes((x=`Flux(km3/km/myr)`), after_stat(ncount)), fill="darkblue", color="black", binwidth=0.5, alpha=0.5)+
+  scale_x_log10(breaks = scales::trans_breaks("log10", function(x) 10^x),
+                labels = scales::trans_format("log10", scales::math_format(10^.x)), limits=c(0.5e0,2e3))+
+  annotation_logticks(sides="b")+
+  labs(x=expression("Flux (km"^"3"*"/km/myr)"),y="Normalized Count", color="Arc Type")+
+  theme_article()+
+  theme(axis.text = element_text(size=16, color="black"), axis.title = element_text(size=24, color="black"))+
+  theme(axis.text.x = element_blank(), axis.title.x = element_blank())+
+  annotate("text", x=3,y=0.8,label="Oceanic", color="darkblue", size=8)+
+  annotate("text", x=3,y=0.67,label="Arcs", color="darkblue", size=8)+
+  annotate("text", x=1,y=0.95,label="n=28", color="darkblue", size=6) 
+```
+Subplot C
+```{r}
+Our_Flux_Plot<-
+  ggplot(data=OurResultsFlux)+
+  geom_histogram(aes((x=`Flux(km3/km/myr)`), after_stat(ncount)), fill="tan1", color="black", binwidth=0.5, alpha=0.5)+
+  scale_x_log10(breaks = scales::trans_breaks("log10", function(x) 10^x),
+                labels = scales::trans_format("log10", scales::math_format(10^.x)), limits=c(0.5e0,2e3))+
+  annotation_logticks(sides="b")+
+  labs(x=expression("Flux (km"^"3"*"/km/myr)"),y="Normalized Count", color="Arc Type")+
+  theme_article()+
+  theme(axis.text = element_text(size=16, color="black"), axis.title = element_text(size=24, color="black"), axis.title.y=element_blank())+
+    annotate("text", x=3,y=0.8,label="Our", color="tan1", size=8)+
+    annotate("text", x=3,y=0.67,label="Estimates", color="tan1", size=8)+
+    annotate("text", x=1,y=0.95,label="n=8", color="tan1", size=6) 
+```
+Stack subplots a,b,c
+```{r}
+ggarrange(Continental_Arc_Flux_Plot,Oceanic_Arc_Flux_Plot,Our_Flux_Plot, nrow=3)
+```
+Create subplot d
+Import simplified data for plotting (simplified table 2)
+```{r}
+ResultsFigData<-read_excel("Results_Fig_Data.xlsx")%>%
+  arrange(OurEstimates)
+```
+Generate figure
+A note: OurEstimates is equivalent to FML in the paper, and OurEstimatesSD is equivalent to FSD. If there is more than one estimate for each arc, they are given in separate columns (variable called Literature1-3)
+```{r}
+ggplot(data=ResultsFigData)+
+  geom_errorbarh(aes(xmin=OurEstimates-OurEstimatesSD, xmax=OurEstimates+OurEstimatesSD, y=reorder(Arc, desc(OurEstimates))), height=0.2, color="tan1")+
+  geom_point(aes(x=OurEstimates,y=reorder(Arc, desc(OurEstimates))), fill="tan1", shape=21, size=5, color="black")+
+  geom_point(data=filter(ResultsFigData, ArcType=="Oceanic"), aes(x=`Literature2`, y=reorder(Arc, desc(OurEstimates))), fill="darkblue", shape=23,size=5, color="black")+
+  geom_point(data=filter(ResultsFigData, ArcType=="Continental"), aes(x=`Literature1`, y=reorder(Arc, desc(OurEstimates))), fill="pink", shape=23, size=5,color="black")+
+  geom_point(data=filter(ResultsFigData, ArcType=="Continental"), aes(x=`Literature2`, y=reorder(Arc, desc(OurEstimates))), fill="pink", shape=23, size=5,color="black")+
+  geom_point(data=filter(ResultsFigData, ArcType=="Continental"), aes(x=`Literature3`, y=reorder(Arc, desc(OurEstimates))), fill="pink", shape=23,size=5,color="black")+
+  theme_article()+
+  labs(x=expression("Flux (km"^"3"*"/km/myr)"))+
+  theme(axis.text = element_text(size=16, color="black"), axis.title = element_text(size=24, color="black"), axis.title.y=element_blank())
+```
+
+
