@@ -6,4 +6,4 @@ To use, download all files (.Rmd is an R-Notebook, which will allow you to run c
 
 To view code in a more "reader friendly" output, download and open Flux_Notebook_knit.nb.html, which will open a formatted version of the code found in the .Rmd file with embedded chunks of code, much like a notebook, in your computer browser.
 
-This code was tested on a Macintosh with an M1 chip (OS Monterey, version 12.4) using RStudio version 1.0.143, but with proper installation of RStudio, this code should run on any device. The runtime of the main code on this machine with 100k iterations is about a half hour.
+This code was tested on a Macintosh with an M1 chip (OS Monterey, version 12.4) using R version 3.6.1 ("Action of the Toes"), but with proper installation of RStudio, this code should run on any device. The runtime of the main code on this machine with 100k iterations is about a half hour.
