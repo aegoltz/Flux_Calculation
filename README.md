@@ -8,7 +8,7 @@ To use, download all files. You will also need to download RStudio, which is fre
 
 To recreate our sensitivity tests and Figure 4, run all codes beginning with "Sensitivity_". This will take ~8 hrs/code if the number of iterations is maintained at 500,000; to run all the codes takes about 90 hours. Once all those are run, you will be able to calculate correlation coefficients using the code "Analyze_Sensitivity_Tests_Publication.R" This code includes simple, custom functions to remove NA rows and calculate pearson and spearman correlation coefficients. Using this code and with the other dataframes saved in your global environment, you will be able to recreate Figure 4.
 
-Finally, to recreate Figure 3, use the code "Make_Figure_3.R". This code imports the Excel sheet "Supplementary Table 2" using a simple command, but will only work if the working directory contains both the code and the Excel sheet.
+Finally, to recreate Figure 3, use the code "Make_Figure_3.R". This code imports the Excel sheet "Supplementary Table 1.xlsx" using a simple command, but will only work if the working directory contains both the code and the Excel sheet.
 
 All these codes are heavily annotated, but please feel free to reach out with any questions.
 
