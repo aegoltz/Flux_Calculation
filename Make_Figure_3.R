@@ -5,7 +5,7 @@ library(egg)
 
 #### Import dataset ####
 
-All_Peridotite_Experiments<-read_excel("Supplementary Table 2.xlsx")
+All_Peridotite_Experiments<-read_excel("Supplementary Table 1.xlsx")
 # if this step isn't working for you, then you can manually import using the "import dataset" function within Rstudio.
 # if you do this, make sure to name your dataset "All_Peridotite_Experiments"
 Filtered_Peridotite_Experiments<-All_Peridotite_Experiments%>%
