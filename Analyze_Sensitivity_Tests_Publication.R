@@ -147,14 +147,14 @@ All_Coefficients<-bind_rows(Coefficients_FWet,
 
 #### Recreate Figure 4####
 library(egg)
+library(tidyverse)
 
-
-ggplot(data=All_Coefficients, aes(y=r2))+
-  geom_point(aes(y=r2,x=reorder(Variable,-r2)), size=3, color='black')+
+ggplot(data=All_Coefficients, aes(y=abs(spearman)))+
+  geom_point(aes(y=abs(spearman),x=reorder(Variable,-abs(spearman))), size=3, color='black')+
   theme_article()+
   theme(axis.text = element_text(size=10, color="black"), axis.title = element_text(size=12, color="black"))+
   theme(axis.title.x = element_blank())+
-  labs(y=expression("r"^2))+ 
+  labs(y=expression(abs(rho)))+ 
   guides(x =  guide_axis(angle = -20))+
   theme(plot.margin = unit(c(0.5,1.2,0.5,0.5), "cm"))
 
