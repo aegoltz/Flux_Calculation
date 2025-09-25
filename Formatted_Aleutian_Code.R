@@ -400,21 +400,21 @@ ggplot(data=Aleutian_Output_H_Filtered_20)+
 
 # Figure 7 # 
 Fig7A<-ggplot(data=filter(Aleutian_Output_H_Filtered_20))+
-  geom_point(aes(x=Fwet,y=TotalFlux, color=ConvergenceRate))+
+  geom_point(aes(x=Fwet,y=TotalFlux, color=ConvergenceRate*1000))+
   theme_article()+
   scale_color_viridis_b(n.breaks=5)+
-  labs(x=expression("F"["Wet"]), y=expression("Mantle-Derived Magma Flux (km"^"3"*"/km/myr)"), color="Convergence Rate (m/yr)")+
+  labs(x=expression("F"["Wet"]), y=expression("Mantle-Derived Magma Flux (km"^"3"*"/km/myr)"), color="Convergence Rate (mm/yr)")+
   geom_text(x=2,y=400,label="(a)",size=8)+
   theme(axis.text = element_text(color="black", size=12),
         axis.title=element_text(size=14),
         legend.text = element_text(size=10),
         legend.key.height= unit(.5, 'cm'))
 Fig7B<-ggplot(data=filter(Aleutian_Output_H_Filtered_20))+
-  geom_point(aes(color=Fwet,y=TotalFlux, x=ConvergenceRate))+
+  geom_point(aes(color=Fwet,y=TotalFlux, x=ConvergenceRate*1000))+
   theme_article()+
   scale_color_viridis_b(n.breaks=5, option="cividis")+
-  labs(color=expression("F"["Wet"]), y=expression("Mantle-Derived Magma Flux (km"^"3"*"/km/myr)"), x="Convergence Rate (m/yr)")+
-  geom_text(x=.025,y=400,label="(b)",size=8)+
+  labs(color=expression("F"["Wet"]), y=expression("Mantle-Derived Magma Flux (km"^"3"*"/km/myr)"), x="Convergence Rate (mm/yr)")+
+  geom_text(x=25,y=400,label="(b)",size=8)+
   theme(axis.text = element_text(color="black", size=12),
         axis.title=element_text(size=14),
         legend.text = element_text(size=10))
