@@ -15,10 +15,11 @@ Fit_Line_MF<-lm(Filtered_Peridotite_Experiments$`Duration (hrs)`~Filtered_Perido
 summary(Fit_Line_MF)
 #### Make Figure ####
 MainTimeFig<-ggplot(data=All_Peridotite_Experiments,aes(y=`Duration (hrs)`,x=`Melt Fraction`))+
-  geom_point(aes(shape=QualitativeWater),size=2)+
+  geom_point(aes(shape=QualitativeWater, color=QualitativeWater),size=2)+
   theme_article()+labs(x="Melt Percentage (vol%)", y="Duration (hours)")+
   geom_rect(aes(xmin=1,xmax=30,ymin=0,ymax=350), color="red", fill=NA, size=1)+lims(x=c(0,80))+
-  theme(legend.title = element_blank())
+  theme(legend.title = element_blank())+
+  scale_color_manual(values=c("darkolivegreen","cadetblue3"))
 
 InsetTimeFig<-ggplot(data=Filtered_Peridotite_Experiments,aes(y=`Duration (hrs)`,x=`Melt Fraction`))+
   geom_point()+
@@ -29,6 +30,7 @@ InsetTimeFig<-ggplot(data=Filtered_Peridotite_Experiments,aes(y=`Duration (hrs)`
 
 TimeFigAll<-MainTimeFig+
   annotation_custom(ggplotGrob(InsetTimeFig), xmin = 32, xmax = 82, 
-                                          ymin = 110, ymax = 360)+annotate(geom="text",x=65,y=320,label="Time == -4.4*F + 153.67", size=4, parse=TRUE)+annotate(geom = "text",x=70,y=300,label="R.S.E == 48.77", parse=TRUE)
+                                          ymin = 110, ymax = 360)+annotate(geom="text",x=65,y=320,label="Time == -4.4*F + 153.67", size=4, parse=TRUE)+annotate(geom = "text",x=70,y=300,label="R.S.E == 48.77", parse=TRUE)+annotate(geom = "text",x=70,y=280,label="r^2 == 0.39", parse=TRUE)
 
 TimeFigAll
+
